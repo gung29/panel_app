@@ -1,0 +1,4 @@
+Py3AMF @ git+https://github.com/StdCarrot/Py3AMF.git
+requests>=2.32.0
+rich>=13.7.1
+pycryptodome>=3.20.0
