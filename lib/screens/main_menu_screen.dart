@@ -11,11 +11,13 @@ import 'package:url_launcher/url_launcher.dart';
 class MainMenuScreen extends StatefulWidget {
   final UserData userData;
   final VoidCallback onLogout;
+  final ValueChanged<UserData> onUserDataUpdated;
 
   const MainMenuScreen({
     super.key,
     required this.userData,
     required this.onLogout,
+    required this.onUserDataUpdated,
   });
 
   @override
@@ -322,8 +324,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           if (id == 'levelling') {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (context) =>
-                    LevellingScreen(userData: widget.userData),
+                builder: (context) => LevellingScreen(
+                  userData: widget.userData,
+                  onUserDataUpdated: widget.onUserDataUpdated,
+                ),
               ),
             );
           }

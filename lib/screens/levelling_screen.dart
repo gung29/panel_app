@@ -1,17 +1,24 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math';
+import 'dart:typed_data';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:panel_app/models/user_data.dart';
+import 'package:panel_app/sage/mission_data.dart';
 import 'package:panel_app/sage/xp_table.dart';
+import 'package:panel_app/services/ninja_sage_workflow.dart';
 import 'package:panel_app/widgets/app_background.dart';
 
 class LevellingScreen extends StatefulWidget {
   final UserData userData;
+  final ValueChanged<UserData>? onUserDataUpdated;
 
   const LevellingScreen({
     super.key,
     required this.userData,
+    this.onUserDataUpdated,
   });
 
   @override
@@ -26,6 +33,36 @@ class _LevellingScreenState extends State<LevellingScreen> {
   bool _isLevelling = false;
   int _currentCountdown = 0;
   Timer? _timer;
+  bool _isProcessingCycle = false;
+  final List<_LogEntry> _logs = [];
+  String? _currentMissionId;
+  MissionInfo? _currentMission;
+  int _currentLevel = 0;
+  int _currentXp = 0;
+  int _currentGold = 0;
+  int _currentTokens = 0;
+  int? _currentMaxEnemyHp;
+
+  int _attrWind = 0;
+  int _attrFire = 0;
+  int _attrLightning = 0;
+  int _attrWater = 0;
+  int _attrEarth = 0;
+
+  String _weaponId = 'wpn_01';
+  String _setId = 'set_01_0';
+  String _backItemId = 'back_01';
+  String _accessoryId = 'accessory_01';
+
+  @override
+  void initState() {
+    super.initState();
+    final d = widget.userData;
+    _currentLevel = d.selectedCharacterLevel ?? 0;
+    _currentXp = d.selectedCharacterXp ?? 0;
+    _currentGold = d.gold;
+    _currentTokens = d.tokens;
+  }
 
   @override
   void dispose() {
@@ -59,23 +96,21 @@ class _LevellingScreenState extends State<LevellingScreen> {
       _currentCountdown = _pickNextDelay();
     });
 
+    _runAmfLevellingSequence();
+
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (!_isLevelling) {
+      if (!_isLevelling || !mounted) {
         timer.cancel();
         return;
       }
-      if (!mounted) {
-        timer.cancel();
-        return;
-      }
-      setState(() {
-        if (_currentCountdown > 0) {
+      if (_currentCountdown > 0) {
+        setState(() {
           _currentCountdown -= 1;
-        } else {
-          _currentCountdown = _pickNextDelay();
-        }
-      });
+        });
+      } else {
+        _onCountdownZero();
+      }
     });
   }
 
@@ -88,11 +123,429 @@ class _LevellingScreenState extends State<LevellingScreen> {
     _timer?.cancel();
   }
 
+  void _applyUpdatedUser(UserData updated) {
+    setState(() {
+      _currentLevel =
+          updated.selectedCharacterLevel ?? _currentLevel;
+      _currentXp =
+          updated.selectedCharacterXp ?? _currentXp;
+      _currentGold = updated.gold;
+      _currentTokens = updated.tokens;
+    });
+    if (widget.onUserDataUpdated != null) {
+      widget.onUserDataUpdated!(updated);
+    }
+  }
+
+  void _onCountdownZero() {
+    if (_isProcessingCycle || !_isLevelling) return;
+    _processCycle();
+  }
+
+  Future<void> _processCycle() async {
+    if (_isProcessingCycle || !_isLevelling) return;
+    _isProcessingCycle = true;
+    try {
+      await _runFinishMissionCycle();
+      if (!_isLevelling || !mounted) return;
+
+      // Jeda acak 1–2 detik sebelum mulai lagi dari awal.
+      final pauseSeconds = 1 + _random.nextInt(2);
+      await Future.delayed(Duration(seconds: pauseSeconds));
+      if (!_isLevelling || !mounted) return;
+
+      await _runAmfLevellingSequence();
+      if (!_isLevelling || !mounted) return;
+
+      setState(() {
+        _currentCountdown = _pickNextDelay();
+      });
+    } finally {
+      _isProcessingCycle = false;
+    }
+  }
+
+  void _addLog(String title, Object data) {
+    const encoder = JsonEncoder.withIndent('  ');
+    String body;
+    try {
+      body = encoder.convert(data);
+    } catch (_) {
+      body = data.toString();
+    }
+    setState(() {
+      _logs.insert(
+        0,
+        _LogEntry(
+          timestamp: DateTime.now(),
+          title: title,
+          body: body,
+        ),
+      );
+      if (_logs.length > 200) {
+        _logs.removeLast();
+      }
+    });
+  }
+
+  Future<void> _runAmfLevellingSequence() async {
+    final charId = widget.userData.selectedCharacterId;
+    final session = NinjaSageWorkflow.currentSessionKey;
+    if (charId == null || session == null || session.isEmpty) {
+      return;
+    }
+
+    try {
+      // 1. CharacterService.getMissionRoomData
+      final roomBody = [
+        [charId, session],
+      ];
+      _addLog(
+        'CharacterService.getMissionRoomData • Request',
+        roomBody,
+      );
+      final roomResp = await NinjaSageWorkflow.invokeAmf(
+        'CharacterService.getMissionRoomData',
+        body: roomBody,
+      );
+      _addLog(
+        'CharacterService.getMissionRoomData • Response',
+        roomResp,
+      );
+
+      // 2. Tentukan misi & musuh dari sage_data.
+      final level = _currentLevel <= 0 ? 1 : _currentLevel;
+      final mission = await MissionData.pickMissionForLevel(level);
+      if (mission == null || mission.enemies.isEmpty) return;
+
+      _currentMissionId = mission.id;
+      _currentMission = mission;
+
+      final enemyIds = mission.enemies;
+      final enemyIdList = enemyIds.join(',');
+
+      final enemyStatsParts = <String>[];
+      int? maxHp;
+      for (final id in enemyIds) {
+        final enemy = await MissionData.getEnemy(id);
+        if (enemy == null) continue;
+        enemyStatsParts.add(
+          'id:${enemy.id}|hp:${enemy.hp}|agility:${enemy.agility}',
+        );
+        if (maxHp == null || enemy.hp > maxHp!) {
+          maxHp = enemy.hp;
+        }
+      }
+      if (enemyStatsParts.isEmpty) return;
+
+      final enemyStatsString = enemyStatsParts.join('#');
+      _currentMaxEnemyHp = maxHp;
+
+      // Agility placeholder: gunakan level sebagai seed sederhana.
+      final agilityString = (widget.userData.selectedCharacterLevel ?? 1)
+          .toString();
+
+      final hashInput =
+          '$enemyIdList$enemyStatsString$agilityString';
+      final battleHash = _cucsgHash(hashInput);
+
+      // 2. BattleSystem.startMission
+      final startBody = [
+        [
+          charId,
+          mission.id,
+          enemyIdList,
+          enemyStatsString,
+          agilityString,
+          battleHash,
+          session,
+        ],
+      ];
+      _addLog('BattleSystem.startMission • Request', startBody);
+      final startMissionResp = await NinjaSageWorkflow.invokeAmf(
+        'BattleSystem.startMission',
+        body: startBody,
+      );
+      _addLog('BattleSystem.startMission • Response', startMissionResp);
+
+      // Simpan battle key jika ada (dipakai nanti untuk finish).
+      final battleKey = startMissionResp['status']?.toString();
+      NinjaSageWorkflow.lastBattleKey = battleKey;
+
+      // 3. CharacterService.getInfo untuk refresh data karakter.
+      final infoBody = [
+        [charId, session, charId, 'MISSION'],
+      ];
+      _addLog('CharacterService.getInfo • Request', infoBody);
+      final infoResp = await NinjaSageWorkflow.invokeAmf(
+        'CharacterService.getInfo',
+        body: infoBody,
+      );
+      _addLog('CharacterService.getInfo • Response', infoResp);
+
+      final charData = infoResp['character_data'];
+      if (charData is Map) {
+        final levelAny = charData['character_level'];
+        final xpAny = charData['character_xp'];
+        final goldAny = charData['character_gold'];
+        final tokensAny = charData['character_tp'];
+        final windAny = charData['atrrib_wind'];
+        final fireAny = charData['atrrib_fire'];
+        final lightningAny = charData['atrrib_lightning'];
+        final waterAny = charData['atrrib_water'];
+        final earthAny = charData['atrrib_earth'];
+
+        _attrWind = (windAny as num?)?.toInt() ?? _attrWind;
+        _attrFire = (fireAny as num?)?.toInt() ?? _attrFire;
+        _attrLightning =
+            (lightningAny as num?)?.toInt() ?? _attrLightning;
+        _attrWater = (waterAny as num?)?.toInt() ?? _attrWater;
+        _attrEarth = (earthAny as num?)?.toInt() ?? _attrEarth;
+
+        final setsAny = charData['character_sets'];
+        if (setsAny is Map) {
+          final w = setsAny['weapon'];
+          final s = setsAny['clothing'] ?? setsAny['set'];
+          final b = setsAny['back_item'];
+          final a = setsAny['accessory'];
+          _weaponId = w?.toString() ?? _weaponId;
+          _setId = s?.toString() ?? _setId;
+          _backItemId = b?.toString() ?? _backItemId;
+          _accessoryId = a?.toString() ?? _accessoryId;
+        }
+
+        final serverLevel =
+            (levelAny as num?)?.toInt() ?? _currentLevel;
+        final serverXp =
+            (xpAny as num?)?.toInt() ?? _currentXp;
+        final serverGold =
+            (goldAny as num?)?.toInt() ?? _currentGold;
+        final serverTokens =
+            (tokensAny as num?)?.toInt() ?? _currentTokens;
+
+        var newLevel = _currentLevel;
+        var newXp = _currentXp;
+        var newGold = _currentGold;
+        var newTokens = _currentTokens;
+
+        // Jangan mundur secara total XP; kalau server
+        // masih kirim nilai sebelum finish, pertahankan
+        // state lokal kita.
+        final currentCombined = _combinedProgress(
+          _currentLevel,
+          _currentXp,
+        );
+        final serverCombined = _combinedProgress(
+          serverLevel,
+          serverXp,
+        );
+
+        if (serverCombined >= currentCombined) {
+          newLevel = serverLevel;
+          newXp = serverXp;
+        }
+
+        // Gold/tokens hanya naik, tidak turun.
+        if (serverGold > _currentGold) {
+          newGold = serverGold;
+        }
+        if (serverTokens > _currentTokens) {
+          newTokens = serverTokens;
+        }
+
+        final updated = widget.userData.copyWith(
+          selectedCharacterLevel: newLevel,
+          selectedCharacterXp: newXp,
+          gold: newGold,
+          tokens: newTokens,
+        );
+
+        if (mounted) {
+          _applyUpdatedUser(updated);
+        }
+      }
+    } catch (_) {
+      // Untuk sekarang, diamkan error AMF agar UI tetap jalan.
+    }
+  }
+
+  Future<void> _runFinishMissionCycle() async {
+    final charId = widget.userData.selectedCharacterId;
+    final session = NinjaSageWorkflow.currentSessionKey;
+    final missionId = _currentMissionId;
+    final battleCode = NinjaSageWorkflow.lastBattleKey;
+
+    if (charId == null ||
+        session == null ||
+        session.isEmpty ||
+        missionId == null ||
+        battleCode == null ||
+        battleCode.isEmpty) {
+      return;
+    }
+
+    final baseHp = _currentMaxEnemyHp ?? 0;
+    final bonus = 100 + _random.nextInt(901); // 100–1000
+    final totalDamage = baseHp + bonus;
+    final finishHash =
+        _cucsgHash('$missionId$charId$battleCode$totalDamage');
+
+    final payloadBase64 = _buildFinishPayloadBase64();
+
+    final finishBody = [
+      [
+        charId,
+        missionId,
+        battleCode,
+        finishHash,
+        totalDamage,
+        session,
+        payloadBase64,
+        0,
+      ],
+    ];
+
+    _addLog('BattleSystem.finishMission • Request', finishBody);
+    final finishResp = await NinjaSageWorkflow.invokeAmf(
+      'BattleSystem.finishMission',
+      body: finishBody,
+    );
+    _addLog('BattleSystem.finishMission • Response', finishResp);
+
+    final result = finishResp['result'];
+    if (result is! List || result.length < 3) {
+      return;
+    }
+
+    final goldAny = result[0];
+    final inner = result[2];
+
+    int? serverLevel;
+    int? serverXp;
+    int? serverTokens;
+
+    if (inner is Map) {
+      final levelAny = inner['level'];
+      final xpAny = inner['xp'];
+      final tokensAny = inner['account_tokens'];
+      if (levelAny is num) serverLevel = levelAny.toInt();
+      if (xpAny is num) serverXp = xpAny.toInt();
+      if (tokensAny is num) serverTokens = tokensAny.toInt();
+    }
+
+    var newLevel = _currentLevel;
+    var newXp = _currentXp;
+    var newGold = _currentGold;
+    var newTokens = _currentTokens;
+
+    // Tambahkan XP reward per misi setiap loop.
+    final rewardXp = _currentMission?.xpReward ?? 0;
+    if (rewardXp > 0) {
+      newXp += rewardXp;
+      // Naik level lokal berdasarkan xp_table.
+      while (true) {
+        final maxXpForLevel = requiredXpForLevel(newLevel);
+        if (maxXpForLevel <= 0) break;
+        if (newXp >= maxXpForLevel) {
+          newXp -= maxXpForLevel;
+          newLevel += 1;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Sinkronkan dengan server jika data server lebih maju.
+    if (serverLevel != null && serverXp != null) {
+      final localCombined = _combinedProgress(newLevel, newXp);
+      final serverCombined = _combinedProgress(serverLevel, serverXp);
+      if (serverCombined > localCombined) {
+        newLevel = serverLevel;
+        newXp = serverXp;
+      }
+    }
+
+    // Tambahkan reward gold.
+    if (goldAny is num) {
+      newGold = _currentGold + goldAny.toInt();
+    }
+    if (serverTokens != null) {
+      newTokens = serverTokens;
+    }
+
+    final updated = widget.userData.copyWith(
+      selectedCharacterLevel: newLevel,
+      selectedCharacterXp: newXp,
+      gold: newGold,
+      tokens: newTokens,
+    );
+
+    if (mounted) {
+      _applyUpdatedUser(updated);
+    }
+  }
+
+  String _cucsgHash(String value) {
+    final bytes = Uint8List(value.length);
+    for (var i = 0; i < value.length; i++) {
+      bytes[i] = value.codeUnitAt(i) & 0xFF;
+    }
+    final digest = sha256.convert(bytes);
+    return digest.toString();
+  }
+
+  String _buildFinishPayloadBase64() {
+    final payload = <String, Object?>{
+      'status': {
+        'wind': _attrWind,
+        'fire': _attrFire,
+        'lightning': _attrLightning,
+        'water': _attrWater,
+        'earth': _attrEarth,
+      },
+      'items': {
+        'weapon': _weaponId,
+        'set': _setId,
+        'back_item': _backItemId,
+        'accessory': _accessoryId,
+      },
+      // Sementara gunakan 1 skill default; di masa depan
+      // bisa diganti dengan daftar skill yang sebenarnya.
+      '____': [
+        {
+          '_': 'skill_10',
+          '__': 29029,
+        },
+      ],
+      'bytes': {
+        // Nilai-nilai berikut diambil dari contoh payload asli.
+        '_': 8216461,
+        '__': 8216461,
+        '___':
+            '176361912940367c3cc999a9f9e951a1d33211545b84b2d5a63933b0020433000c3bb410fb1763619129176361912917636191291763619129',
+        '____': 1763619129,
+        '_____': 8216461,
+        '______': 8216461,
+      },
+    };
+
+    final jsonText = jsonEncode(payload);
+    final bytes = utf8.encode(jsonText);
+    return base64Encode(bytes);
+  }
+
+  int _combinedProgress(int level, int xp) {
+    // Kombinasi level+xp menjadi satu angka besar
+    // untuk perbandingan monoton tanpa harus
+    // menghitung total XP kumulatif.
+    return level * 100000000 + xp;
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final level = widget.userData.selectedCharacterLevel ?? 0;
-    final xp = widget.userData.selectedCharacterXp ?? 0;
+    final level = _currentLevel;
+    final xp = _currentXp;
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -123,7 +576,7 @@ class _LevellingScreenState extends State<LevellingScreen> {
                           _buildStatusRow(theme),
                           const SizedBox(height: 16),
                           _CharacterStatusCard(
-                            gold: widget.userData.gold,
+                            gold: _currentGold,
                             level: level,
                             xp: xp,
                           ),
@@ -138,6 +591,8 @@ class _LevellingScreenState extends State<LevellingScreen> {
                           _LevellingSettingsCard(
                             onDelayRangeChanged: _updateDelayRange,
                           ),
+                          const SizedBox(height: 16),
+                          _AmfLogPanel(entries: _logs),
                         ],
                       ),
                     ),
@@ -171,6 +626,10 @@ class _LevellingScreenState extends State<LevellingScreen> {
   }
 
   Widget _buildStatusRow(ThemeData theme) {
+    final isRunning = _isLevelling;
+    final Color dotColor = isRunning ? const Color(0xFF22C55E) : Colors.redAccent;
+    final String label = isRunning ? 'Running' : 'Stopped';
+
     return Row(
       children: [
         Expanded(
@@ -186,14 +645,14 @@ class _LevellingScreenState extends State<LevellingScreen> {
                 Container(
                   width: 10,
                   height: 10,
-                  decoration: const BoxDecoration(
-                    color: Colors.redAccent,
+                  decoration: BoxDecoration(
+                    color: dotColor,
                     shape: BoxShape.circle,
                   ),
                 ),
                 const SizedBox(width: 10),
                 Text(
-                  'Stopped',
+                  label,
                   style: theme.textTheme.bodyMedium,
                 ),
               ],
@@ -631,13 +1090,97 @@ class _SessionPanel extends StatelessWidget {
   }
 
   String _formatSeconds(int seconds) {
-    final clamped = seconds.clamp(0, 24 * 60 * 60);
-    final h = clamped ~/ 3600;
-    final m = (clamped % 3600) ~/ 60;
+    final clamped = seconds.clamp(0, 99 * 60 + 59);
+    final m = clamped ~/ 60;
     final s = clamped % 60;
-    return '${h.toString().padLeft(2, '0')}:'
-        '${m.toString().padLeft(2, '0')}:'
+    return '${m.toString().padLeft(2, '0')}:'
         '${s.toString().padLeft(2, '0')}';
+  }
+}
+
+class _AmfLogPanel extends StatelessWidget {
+  final List<_LogEntry> entries;
+
+  const _AmfLogPanel({required this.entries});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'AMF Logs',
+            style: theme.textTheme.titleMedium?.copyWith(
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 200,
+            child: entries.isEmpty
+                ? Center(
+                    child: Text(
+                      'Belum ada log.',
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: Colors.white.withOpacity(0.6),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    padding: EdgeInsets.zero,
+                    itemCount: entries.length,
+                    itemBuilder: (context, index) {
+                      final e = entries[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Container(
+                          padding: const EdgeInsets.all(10),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.02),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.06),
+                            ),
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                e.title,
+                                style:
+                                    theme.textTheme.bodySmall?.copyWith(
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                e.body,
+                                style:
+                                    theme.textTheme.bodySmall?.copyWith(
+                                  color:
+                                      Colors.white.withOpacity(0.75),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -668,4 +1211,16 @@ class _SettingsField extends StatelessWidget {
       ),
     );
   }
+}
+
+class _LogEntry {
+  final DateTime timestamp;
+  final String title;
+  final String body;
+
+  _LogEntry({
+    required this.timestamp,
+    required this.title,
+    required this.body,
+  });
 }

@@ -28,11 +28,21 @@ class NinjaSageWorkflow {
   static int? _desktopUid;
   static String? _desktopSessionKey;
 
+  static int? _androidUid;
+  static String? _androidSessionKey;
+
+  static String? lastBattleKey;
+
   static bool get hasDesktopSession =>
       _desktopUid != null && _desktopSessionKey != null;
 
   static int? get desktopUid => _desktopUid;
   static String? get desktopSessionKey => _desktopSessionKey;
+
+  static int? get currentUid =>
+      _isAndroid ? _androidUid : _desktopUid;
+  static String? get currentSessionKey =>
+      _isAndroid ? _androidSessionKey : _desktopSessionKey;
 
   /// Run the initial workflow steps:
   /// - SystemLogin.checkVersion
@@ -93,9 +103,20 @@ class NinjaSageWorkflow {
         'password': password,
       });
       if (result == null) return null;
-      return result.map(
+
+      final mapped = result.map(
         (key, value) => MapEntry(key.toString(), value),
       );
+
+      final login = mapped['login'];
+      if (login is Map) {
+        final uidAny = login['uid'];
+        final sessAny = login['sessionkey'];
+        _androidUid = (uidAny as num?)?.toInt();
+        _androidSessionKey = sessAny?.toString();
+      }
+
+      return mapped;
     }
 
     if (_isDesktop) {
@@ -213,5 +234,35 @@ class NinjaSageWorkflow {
     }
 
     return null;
+  }
+
+  /// Low-level AMF invocation for non-Web platforms.
+  static Future<Map<String, dynamic>> invokeAmf(
+    String target, {
+    List<dynamic>? body,
+  }) async {
+    if (_isAndroid) {
+      final result =
+          await _channel.invokeMethod<Map<dynamic, dynamic>>(
+        'invokeAmf',
+        <String, Object?>{
+          'target': target,
+          'body': body,
+        },
+      );
+      if (result == null) return <String, dynamic>{};
+      return result.map(
+        (key, value) => MapEntry(key.toString(), value),
+      );
+    }
+
+    if (_isDesktop) {
+      final client = WebAmfNinjaSageClient();
+      return client.invoke(target, body: body);
+    }
+
+    throw UnsupportedError(
+      'Pemanggilan AMF tidak didukung di platform ini.',
+    );
   }
 }

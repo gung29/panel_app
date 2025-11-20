@@ -89,37 +89,26 @@ const Map<int, int> xpLevelTotal = {
 double calculateXpProgress(int level, int xp) {
   if (level <= 0 || xpLevelTotal.isEmpty) return 0;
 
-  final currentTotal = xpLevelTotal[level];
-  if (currentTotal == null) {
-    // Level di luar tabel; anggap sudah penuh.
-    return 1;
-  }
+  // Di file xp-level.json, nilai tiap key adalah
+  // maksimal XP untuk level tersebut. Jadi progress
+  // cukup xp_saat_ini / xp_maks_level.
+  final maxXp = xpLevelTotal[level];
+  if (maxXp == null || maxXp <= 0) return 0;
 
-  final prevTotal = xpLevelTotal[level - 1] ?? 0;
-  if (currentTotal <= prevTotal) return 1;
-
-  final clampedXp = xp.clamp(prevTotal, currentTotal);
-  final progress = (clampedXp - prevTotal) / (currentTotal - prevTotal);
+  final clampedXp = xp.clamp(0, maxXp);
+  final progress = clampedXp / maxXp;
   if (progress.isNaN) return 0;
   return progress.clamp(0.0, 1.0);
 }
 
 int currentXpInLevel(int level, int xp) {
   if (level <= 0 || xpLevelTotal.isEmpty) return 0;
-  final currentTotal = xpLevelTotal[level];
-  if (currentTotal == null) return 0;
-  final prevTotal = xpLevelTotal[level - 1] ?? 0;
-  if (currentTotal <= prevTotal) return 0;
-  final clampedXp = xp.clamp(prevTotal, currentTotal);
-  return (clampedXp - prevTotal).toInt();
+  final maxXp = xpLevelTotal[level];
+  if (maxXp == null || maxXp <= 0) return 0;
+  return xp.clamp(0, maxXp);
 }
 
 int requiredXpForLevel(int level) {
   if (level <= 0 || xpLevelTotal.isEmpty) return 0;
-  final currentTotal = xpLevelTotal[level];
-  if (currentTotal == null) return 0;
-  final prevTotal = xpLevelTotal[level - 1] ?? 0;
-  final diff = currentTotal - prevTotal;
-  return diff > 0 ? diff : 0;
+  return xpLevelTotal[level] ?? 0;
 }
-

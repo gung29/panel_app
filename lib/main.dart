@@ -154,6 +154,11 @@ class _RootNavigatorState extends State<_RootNavigator> {
         return MainMenuScreen(
           userData: _userData,
           onLogout: _handleLogout,
+          onUserDataUpdated: (updated) {
+            setState(() {
+              _userData = updated;
+            });
+          },
         );
     }
   }

@@ -68,6 +68,8 @@ flutter:
 
   assets:
     - logo-ninja-panel.png
+    - sage_data/mission.json
+    - sage_data/enemy.json
 
 flutter_launcher_icons:
   image_path: "logo-ninja-panel.png"
