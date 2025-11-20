@@ -5,7 +5,6 @@ import 'package:panel_app/screens/character_selection_screen.dart';
 import 'package:panel_app/screens/login_screen.dart';
 import 'package:panel_app/screens/main_menu_screen.dart';
 import 'package:panel_app/services/android_amf_ninja_sage_client.dart';
-import 'package:panel_app/services/http_ninja_sage_client.dart';
 import 'package:panel_app/services/ninja_characters_repository.dart';
 import 'package:panel_app/services/ninja_sage_workflow.dart';
 import 'package:panel_app/services/web_amf_ninja_sage_client.dart';

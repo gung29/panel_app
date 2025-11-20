@@ -282,42 +282,128 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 24),
                   Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       Text(
-                        'Ingin mendaftar? Kontak Kami:',
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: Colors.white.withOpacity(0.8),
-                          fontWeight: FontWeight.w600,
+                        'Contact Me:', // Uppercase agar lebih elegan
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: Colors.white.withOpacity(0.6),
+                          letterSpacing: 1.5, // Spasi antar huruf memberi kesan premium
+                          fontWeight: FontWeight.w500,
                         ),
                         textAlign: TextAlign.center,
                       ),
-                      const SizedBox(height: 16),
-                      const _ContactButton(
+                      const SizedBox(height: 20),
+                      
+                      // BUTTON WHATSAPP
+                      _MinimalSocialCard(
                         icon: FontAwesomeIcons.whatsapp,
-                        title: 'WhatsApp',
-                        subtitle: '081337601260',
-                        url: 'https://wa.me/6281337601260',
+                        title: 'Chat via WhatsApp',
+                        color: const Color(0xFF25D366), // Warna Official WA
+                        onTap: () => _launchURL('https://wa.me/6281337601260'),
                       ),
-                      const SizedBox(height: 8),
-                      const _ContactButton(
-                        icon: FontAwesomeIcons.facebook,
-                        title: 'Facebook',
-                        subtitle: 'agung.nich29',
-                        url: 'https://www.facebook.com/agung.nich29/',
+                      const SizedBox(height: 12),
+
+                      // BUTTON FACEBOOK
+                      _MinimalSocialCard(
+                        icon: FontAwesomeIcons.facebookF, // Icon 'F' lebih minimalis
+                        title: 'Visit Facebook',
+                        color: const Color(0xFF1877F2), // Warna Official FB
+                        onTap: () => _launchURL('https://www.facebook.com/agung.nich29/'),
                       ),
-                      const SizedBox(height: 8),
-                      const _ContactButton(
+                      const SizedBox(height: 12),
+
+                      // BUTTON TELEGRAM
+                      _MinimalSocialCard(
                         icon: FontAwesomeIcons.telegram,
-                        title: 'Telegram',
-                        subtitle: '@gungzy29',
-                        url: 'https://t.me/gungzy29',
+                        title: 'Chat via Telegram',
+                        color: const Color(0xFF0088CC), // Warna Official Telegram
+                        onTap: () => _launchURL('https://t.me/gungzy29'),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// FUNGSI LAUNCHER (Pastikan import url_launcher)
+void _launchURL(String urlString) async {
+  // Implementasi url_launcher di sini
+}
+
+// WIDGET CUSTOM BARU (Letakkan di bawah file atau file terpisah)
+class _MinimalSocialCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final Color color;
+  final VoidCallback onTap;
+
+  const _MinimalSocialCard({
+    required this.icon,
+    required this.title,
+    required this.color,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16), // Rounded corner modern
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+          decoration: BoxDecoration(
+            // Latar belakang semi-transparan (Glassmorphism halus)
+            color: Colors.white.withOpacity(0.05), 
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: Colors.white.withOpacity(0.1), // Border tipis elegan
+              width: 1,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Icon Container dengan background pudar warnanya
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.2),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(
+                  icon,
+                  color: color, // Warna icon menyala sesuai brand
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 16),
+              
+              // Text Title
+              Expanded(
+                child: Text(
+                  title,
+                  style: const TextStyle(
+                    color: Colors.white, // Atau sesuaikan tema
+                    fontWeight: FontWeight.w600,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              
+              // Arrow Icon halus di ujung kanan
+              Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: Colors.white.withOpacity(0.3),
+                size: 16,
+              ),
+            ],
           ),
         ),
       ),

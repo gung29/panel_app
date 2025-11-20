@@ -43,12 +43,12 @@ class AppTheme {
           borderRadius: BorderRadius.circular(4),
         ),
         side: BorderSide(color: Colors.white.withOpacity(0.3)),
-        fillColor: MaterialStateProperty.resolveWith(
-          (states) => states.contains(MaterialState.selected)
+        fillColor: WidgetStateProperty.resolveWith(
+          (states) => states.contains(WidgetState.selected)
               ? Colors.white
               : Colors.transparent,
         ),
-        checkColor: const MaterialStatePropertyAll(Colors.black),
+        checkColor: const WidgetStatePropertyAll(Colors.black),
       ),
     );
   }
