@@ -20,7 +20,8 @@ class NinjaSageWorkflow {
       !kIsWeb &&
       (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.linux);
+          defaultTargetPlatform == TargetPlatform.linux ||
+          defaultTargetPlatform == TargetPlatform.iOS);
 
   static int? _desktopCharacterSeed;
   static String? _desktopCharacterKey;
