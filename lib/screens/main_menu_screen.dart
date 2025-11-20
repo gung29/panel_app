@@ -5,6 +5,8 @@ import 'package:panel_app/sage/xp_table.dart';
 import 'package:panel_app/widgets/app_background.dart';
 import 'package:panel_app/widgets/menu_item_card.dart';
 import 'package:panel_app/widgets/quest_card.dart';
+import 'package:panel_app/screens/levelling_screen.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MainMenuScreen extends StatefulWidget {
   final UserData userData;
@@ -22,6 +24,19 @@ class MainMenuScreen extends StatefulWidget {
 
 class _MainMenuScreenState extends State<MainMenuScreen> {
   String? _activeMenuId;
+
+  Future<void> _openBugReport() async {
+    const url = 'https://www.facebook.com/agung.nich29/';
+    final uri = Uri.parse(url);
+    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Gagal membuka halaman laporan bug.'),
+        ),
+      );
+    }
+  }
 
   Future<void> _confirmLogout() async {
     final theme = Theme.of(context);
@@ -136,12 +151,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                           icon: Icons.monetization_on_outlined,
                           label: 'Gold',
                           value: widget.userData.gold.toString(),
+                          accentColor: const Color(0xFFFACC6B),
                         ),
                         const SizedBox(height: 6),
                         _ResourceChip(
                           icon: Icons.diamond_outlined,
                           label: 'Tokens',
                           value: widget.userData.tokens.toString(),
+                          accentColor: const Color(0xFF38BDF8),
                         ),
                         const SizedBox(height: 4),
                         IconButton(
@@ -163,7 +180,9 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       minHeight: 4,
                       backgroundColor: Colors.white.withOpacity(0.12),
                       valueColor:
-                          const AlwaysStoppedAnimation<Color>(Colors.white),
+                          const AlwaysStoppedAnimation<Color>(
+                        Color(0xFF22C55E),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -173,7 +192,7 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                       'XP ${currentXpInLevel(level, xp)} / '
                       '${requiredXpForLevel(level)}',
                       style: theme.textTheme.bodySmall?.copyWith(
-                        color: Colors.white.withOpacity(0.6),
+                        color: const Color(0xFF22C55E).withOpacity(0.85),
                         fontSize: 11,
                       ),
                     ),
@@ -191,31 +210,10 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                   const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
               child: ListView(
                 children: [
-                  // Quick stats
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
-                    children: const [
-                      _StatCard(
-                        title: 'Battles Won',
-                        subtitle: '24 Victories',
-                        label: 'Today',
-                        icon: Icons.emoji_events_outlined,
-                      ),
-                      _StatCard(
-                        title: 'Combat Power',
-                        subtitle: '12,500',
-                        label: 'Active',
-                        icon: Icons.sports_martial_arts_outlined,
-                      ),
-                      _StatCard(
-                        title: 'Global Ranking',
-                        subtitle: '#1,247',
-                        label: 'Rank',
-                        icon: Icons.leaderboard_outlined,
-                      ),
-                    ],
-                  ),
+                  // App status + bug report
+                  const _AppStatusRow(),
+                  const SizedBox(height: 12),
+                  _BugReportButton(onTap: _openBugReport),
                   const SizedBox(height: 32),
 
                   // Game modes
@@ -226,45 +224,43 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  Wrap(
-                    spacing: 16,
-                    runSpacing: 16,
+                  Column(
                     children: [
                       _buildMenuItem(
                         id: 'levelling',
                         icon: Icons.trending_up_rounded,
                         title: 'Levelling',
-                        description: 'Train and level up your character',
+                        description: 'Level up your character instantly',
                       ),
                       _buildMenuItem(
                         id: 'event',
                         icon: Icons.event_rounded,
                         title: 'Event',
-                        description: 'Join limited-time events',
+                        description: 'Soon',
                       ),
                       _buildMenuItem(
                         id: 'hunting-house',
                         icon: Icons.home_max_rounded,
                         title: 'Hunting House',
-                        description: 'Hunt monsters and gain rewards',
+                        description: 'Soon',
                       ),
                       _buildMenuItem(
                         id: 'daemon',
                         icon: Icons.dangerous_outlined,
                         title: 'Daemon',
-                        description: 'Face powerful daemon bosses',
+                        description: 'Soon',
                       ),
                       _buildMenuItem(
                         id: 'clan',
                         icon: Icons.groups_rounded,
                         title: 'Clan',
-                        description: 'Manage your clan activities',
+                        description: 'Soon',
                       ),
                       _buildMenuItem(
                         id: 'crew',
                         icon: Icons.directions_boat_filled_outlined,
                         title: 'Crew',
-                        description: 'Team up with your crew',
+                        description: 'Soon',
                       ),
                     ],
                   ),
@@ -312,8 +308,8 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
     required String title,
     required String description,
   }) {
-    return SizedBox(
-      width: 260,
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: MenuItemCard(
         icon: icon,
         title: title,
@@ -323,6 +319,14 @@ class _MainMenuScreenState extends State<MainMenuScreen> {
           setState(() {
             _activeMenuId = id;
           });
+          if (id == 'levelling') {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (context) =>
+                    LevellingScreen(userData: widget.userData),
+              ),
+            );
+          }
         },
       ),
     );
@@ -333,61 +337,69 @@ class _ResourceChip extends StatelessWidget {
   final IconData icon;
   final String label;
   final String value;
+  final Color accentColor;
 
   const _ResourceChip({
     required this.icon,
     required this.label,
     required this.value,
+    required this.accentColor,
   });
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.white.withOpacity(0.12)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 28,
-            height: 28,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.06),
-              borderRadius: BorderRadius.circular(10),
+    return SizedBox(
+      width: 120,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: accentColor.withOpacity(0.10),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: accentColor.withOpacity(0.45)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 28,
+              height: 28,
+              decoration: BoxDecoration(
+                color: accentColor.withOpacity(0.25),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, size: 16, color: Colors.white),
             ),
-            child: Icon(icon, size: 16, color: Colors.white),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                label,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white.withOpacity(0.6),
-                  fontSize: 11,
-                ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 11,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    value,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: accentColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
               ),
-              Text(
-                value,
-                style: theme.textTheme.bodySmall?.copyWith(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ],
+            ),
+          ],
+        ),
       ),
     );
   }
 }
-
 class _StatCard extends StatelessWidget {
   final String title;
   final String subtitle;
@@ -453,6 +465,145 @@ class _StatCard extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AppStatusRow extends StatelessWidget {
+  const _AppStatusRow();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.03),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 34,
+            height: 34,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.verified_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Status Aplikasi',
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 11,
+                  ),
+                ),
+                Text(
+                  'Lisensi Aktif • Tidak ada tanggal kedaluwarsa',
+                  style: theme.textTheme.bodyMedium?.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BugReportButton extends StatelessWidget {
+  final VoidCallback onTap;
+
+  const _BugReportButton({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          decoration: BoxDecoration(
+            gradient: const LinearGradient(
+              colors: [
+                Color(0xFFFF4B4B),
+                Color(0xFFB31217),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(999),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.redAccent.withOpacity(0.45),
+                blurRadius: 18,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.18),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Icon(
+                  Icons.bug_report_rounded,
+                  size: 16,
+                  color: Colors.white,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'Laporkan Bug',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  Text(
+                    'Kirim laporan ke Facebook',
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: Colors.white.withOpacity(0.85),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

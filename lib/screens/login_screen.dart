@@ -170,7 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       const SizedBox(height: 24),
                       Text(
-                        'Welcome Back',
+                        'NinjaZ Panel',
                         style: theme.textTheme.headlineSmall,
                       ),
                       const SizedBox(height: 6),

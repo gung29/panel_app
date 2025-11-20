@@ -32,37 +32,37 @@ const menuItems: MenuItemType[] = [
     id: 'levelling',
     label: 'Levelling',
     icon: TrendingUp,
-    description: 'Train and level up your character',
+    description: 'Level up your character instantly',
   },
   {
     id: 'event',
     label: 'Event',
     icon: Calendar,
-    description: 'Join limited-time events',
+    description: 'Soon',
   },
   {
     id: 'hunting-house',
     label: 'Hunting House',
     icon: Home,
-    description: 'Hunt monsters and gain rewards',
+    description: 'Soon',
   },
   {
     id: 'daemon',
     label: 'Daemon',
     icon: Skull,
-    description: 'Face powerful daemon bosses',
+    description: 'Soon',
   },
   {
     id: 'clan',
     label: 'Clan',
     icon: Users,
-    description: 'Manage your clan activities',
+    description: 'Soon',
   },
   {
     id: 'crew',
     label: 'Crew',
     icon: Ship,
-    description: 'Team up with your crew',
+    description: 'Soon',
   },
 ];
 

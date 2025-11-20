@@ -24,7 +24,7 @@ export function LoginPage({ onLogin }: LoginPageProps) {
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-white/5 backdrop-blur-sm mb-6 border border-white/10">
             <div className="w-8 h-8 rounded-lg bg-white" />
           </div>
-          <h1 className="text-white mb-2">Welcome Back</h1>
+          <h1 className="text-white mb-2">NinjaZ Panel</h1>
           <p className="text-zinc-500">Sign in to continue</p>
         </div>
 
