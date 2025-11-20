@@ -1,6 +1,6 @@
 {
-    "name": "panel_app",
-    "short_name": "panel_app",
+    "name": "NinjaZ Panel",
+    "short_name": "NinjaZPanel",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

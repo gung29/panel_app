@@ -158,10 +158,13 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         child: Container(
-                          margin: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
+                          margin: const EdgeInsets.all(10),
+                          child: ClipRRect(
                             borderRadius: BorderRadius.circular(14),
+                            child: Image.asset(
+                              'logo-ninja-panel.png',
+                              fit: BoxFit.cover,
+                            ),
                           ),
                         ),
                       ),
